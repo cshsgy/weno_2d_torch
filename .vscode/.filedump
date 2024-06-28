@@ -1,0 +1,6 @@
+
+		begin
+      f = addfile("/Users/sihechen/tmp/torch_test/build/final_10.nc","r")
+      print(f)
+		end
+    
