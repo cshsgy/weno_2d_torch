@@ -19,7 +19,7 @@ int main() {
     int num_steps = 500;
 
     // Choose boundary condition
-    BoundaryCondition bc = DOUBLE_PERIODIC; // two options: ZERO_GRADIENT, DOUBLE_PERIODIC
+    int bc = 1; // two options: ZERO_GRADIENT, DOUBLE_PERIODIC
 
 
     for (int i = 0; i < n; ++i) {

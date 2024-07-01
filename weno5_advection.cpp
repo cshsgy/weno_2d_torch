@@ -1,4 +1,9 @@
 // weno5_advection.cpp
+#include <torch/torch.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <iostream>
+
 #include "weno5_advection.h"
 
 // Helper function to compute the WENO5 weights
@@ -18,10 +23,10 @@ torch::Tensor weno5_weights(const torch::Tensor& beta) {
 }
 
 // Helper functions to apply boundary conditions
-torch::Tensor apply_boundary_conditions(const torch::Tensor& u, BoundaryCondition bc) {
+torch::Tensor apply_boundary_conditions(const torch::Tensor& u, int bc) {
     int n = u.size(0);
     auto extended_u = torch::zeros({n + 6});
-    if (bc == ZERO_GRADIENT) {
+    if (bc == 0) {
         extended_u.slice(0, 3, -3) = u;
         extended_u[0] = u[0];
         extended_u[1] = u[0];
@@ -29,7 +34,7 @@ torch::Tensor apply_boundary_conditions(const torch::Tensor& u, BoundaryConditio
         extended_u[-2] = u[-1];
         extended_u[-1] = u[-1];
         extended_u[-3] = u[-1];
-    } else if (bc == DOUBLE_PERIODIC) {
+    } else if (bc == 1) {
         extended_u.slice(0, 3, -3) = u;
         extended_u[0] = u[-3];
         extended_u[1] = u[-2];
@@ -42,10 +47,10 @@ torch::Tensor apply_boundary_conditions(const torch::Tensor& u, BoundaryConditio
     return extended_u;
 }
 
-torch::Tensor apply_boundary_conditions_x(const torch::Tensor& u, BoundaryCondition bc) {
+torch::Tensor apply_boundary_conditions_x(const torch::Tensor& u, int bc) {
     int n = u.size(1);
     auto extended_u = torch::zeros({u.size(0), n + 6}, u.device());
-    if (bc == ZERO_GRADIENT) {
+    if (bc == 0) {
         extended_u.slice(1, 3, -3) = u;
         extended_u.index({torch::indexing::Slice(), 0}) = u.index({torch::indexing::Slice(), 0});
         extended_u.index({torch::indexing::Slice(), 1}) = u.index({torch::indexing::Slice(), 0});
@@ -53,7 +58,7 @@ torch::Tensor apply_boundary_conditions_x(const torch::Tensor& u, BoundaryCondit
         extended_u.index({torch::indexing::Slice(), -3}) = u.index({torch::indexing::Slice(), -1});
         extended_u.index({torch::indexing::Slice(), -2}) = u.index({torch::indexing::Slice(), -1});
         extended_u.index({torch::indexing::Slice(), -1}) = u.index({torch::indexing::Slice(), -1});
-    } else if (bc == DOUBLE_PERIODIC) {
+    } else if (bc == 1) {
         extended_u.slice(1, 3, -3) = u;
         extended_u.index({torch::indexing::Slice(), 0}) = u.index({torch::indexing::Slice(), -3});
         extended_u.index({torch::indexing::Slice(), 1}) = u.index({torch::indexing::Slice(), -2});
@@ -66,10 +71,10 @@ torch::Tensor apply_boundary_conditions_x(const torch::Tensor& u, BoundaryCondit
     return extended_u;
 }
 
-torch::Tensor apply_boundary_conditions_y(const torch::Tensor& u, BoundaryCondition bc) {
+torch::Tensor apply_boundary_conditions_y(const torch::Tensor& u, int bc) {
     int n = u.size(0);
     auto extended_u = torch::zeros({n + 6, u.size(1)}, u.device());
-    if (bc == ZERO_GRADIENT) {
+    if (bc == 0) {
         extended_u.slice(0, 3, -3) = u;
         extended_u.index({0, torch::indexing::Slice()}) = u.index({0, torch::indexing::Slice()});
         extended_u.index({1, torch::indexing::Slice()}) = u.index({0, torch::indexing::Slice()});
@@ -77,7 +82,7 @@ torch::Tensor apply_boundary_conditions_y(const torch::Tensor& u, BoundaryCondit
         extended_u.index({-3, torch::indexing::Slice()}) = u.index({-1, torch::indexing::Slice()});
         extended_u.index({-2, torch::indexing::Slice()}) = u.index({-1, torch::indexing::Slice()});
         extended_u.index({-1, torch::indexing::Slice()}) = u.index({-1, torch::indexing::Slice()});
-    } else if (bc == DOUBLE_PERIODIC) {
+    } else if (bc == 1) {
         extended_u.slice(0, 3, -3) = u;
         extended_u.index({0, torch::indexing::Slice()}) = u.index({-3, torch::indexing::Slice()});
         extended_u.index({1, torch::indexing::Slice()}) = u.index({-2, torch::indexing::Slice()});
@@ -91,7 +96,7 @@ torch::Tensor apply_boundary_conditions_y(const torch::Tensor& u, BoundaryCondit
 }
 
 // WENO5 reconstruction function
-torch::Tensor weno5_reconstruction(const torch::Tensor& u, const torch::Tensor& a, BoundaryCondition bc) {
+torch::Tensor weno5_reconstruction(const torch::Tensor& u, const torch::Tensor& a, int bc) {
     int n = u.size(0);
     torch::Tensor flux = torch::zeros({n+2});
     // Apply boundary conditions, extend the domain to n+6
@@ -117,7 +122,7 @@ torch::Tensor weno5_reconstruction(const torch::Tensor& u, const torch::Tensor& 
 }
 
 // WENO5 reconstruction function on x-axis, along the rows
-torch::Tensor weno5_reconstruction_x(const torch::Tensor& u, const torch::Tensor& a, BoundaryCondition bc) {
+torch::Tensor weno5_reconstruction_x(const torch::Tensor& u, const torch::Tensor& a, int bc) {
     int n = u.size(1);
     torch::Tensor flux = torch::zeros({u.size(0), n+2}, u.device());
     // Apply boundary conditions, extend the domain to n+6
@@ -148,7 +153,7 @@ torch::Tensor weno5_reconstruction_x(const torch::Tensor& u, const torch::Tensor
 }
 
 // WENO5 reconstruction function on y-axis, along the columns
-torch::Tensor weno5_reconstruction_y(const torch::Tensor& u, const torch::Tensor& a, BoundaryCondition bc) {
+torch::Tensor weno5_reconstruction_y(const torch::Tensor& u, const torch::Tensor& a, int bc) {
     int n = u.size(0);
     torch::Tensor flux = torch::zeros({n+2, u.size(1)}, u.device());
     // Apply boundary conditions, extend the domain to n+6
@@ -179,7 +184,7 @@ torch::Tensor weno5_reconstruction_y(const torch::Tensor& u, const torch::Tensor
 }
 
 // Residual calculation function
-torch::Tensor residual(const torch::Tensor& u, const torch::Tensor& a, double dx, BoundaryCondition bc) {
+torch::Tensor residual(const torch::Tensor& u, const torch::Tensor& a, double dx, int bc) {
     auto flux = weno5_reconstruction(u, a, bc);
     torch::Tensor res = torch::zeros_like(u);
     res = (flux.slice(0, 1, -1) - flux.slice(0, 0, -2)) / dx;
@@ -187,7 +192,7 @@ torch::Tensor residual(const torch::Tensor& u, const torch::Tensor& a, double dx
 }
 
 // 2D residual calculation function
-torch::Tensor residual_2d(const torch::Tensor& u, const torch::Tensor& ax, const torch::Tensor& ay, double dx, double dy, BoundaryCondition bc) {
+torch::Tensor residual_2d(const torch::Tensor& u, const torch::Tensor& ax, const torch::Tensor& ay, double dx, double dy, int bc) {
     auto flux_x = weno5_reconstruction_x(u, ax, bc);
     auto flux_y = weno5_reconstruction_y(u, ay, bc);
     torch::Tensor res = torch::zeros_like(u, u.device());
@@ -197,7 +202,7 @@ torch::Tensor residual_2d(const torch::Tensor& u, const torch::Tensor& ax, const
 }
 
 // Time stepping function using RK3
-void time_step(torch::Tensor& u, const torch::Tensor& a, double dt, double dx, BoundaryCondition bc) {
+void time_step(torch::Tensor& u, const torch::Tensor& a, double dt, double dx, int bc) {
     auto k1 = residual(u, a, dx, bc);
     auto u1 = u - dt * k1;
     auto k2 = residual(u1, a, dx, bc);
@@ -207,12 +212,32 @@ void time_step(torch::Tensor& u, const torch::Tensor& a, double dt, double dx, B
 }
 
 // 2D time stepping function using RK3
-void time_step_2d(torch::Tensor& u, const torch::Tensor& ax, const torch::Tensor& ay, double dt, double dx, double dy, BoundaryCondition bc) {
+void time_step_2d(torch::Tensor& u, const torch::Tensor& ax, const torch::Tensor& ay, double dt, double dx, double dy, int bc) {
     auto k1 = residual_2d(u, ax, ay, dx, dy, bc);
     auto u1 = u - dt * k1;
-    std::cout << u1.device() << std::endl;
+    // std::cout << u1.device() << std::endl;
     auto k2 = residual_2d(u1, ax, ay, dx, dy, bc);
     auto u2 = 3.0/4.0 * u + 1.0/4.0 * (u1 - dt * k2);
     auto k3 = residual_2d(u2, ax, ay, dx, dy, bc);
     u = 1.0/3.0 * u + 2.0/3.0 * (u2 - dt * k3);
+}
+
+// 2D time stepping function using RK3
+torch::Tensor time_step_2d_return(const torch::Tensor& u, const torch::Tensor& ax, const torch::Tensor& ay, double dt, double dx, double dy, int bc) {
+    auto k1 = residual_2d(u, ax, ay, dx, dy, bc);
+    auto u1 = u - dt * k1;
+    // std::cout << u1.device() << std::endl;
+    auto k2 = residual_2d(u1, ax, ay, dx, dy, bc);
+    auto u2 = 3.0/4.0 * u + 1.0/4.0 * (u1 - dt * k2);
+    auto k3 = residual_2d(u2, ax, ay, dx, dy, bc);
+    auto new_u = 1.0/3.0 * u + 2.0/3.0 * (u2 - dt * k3);
+    return new_u;
+}
+
+namespace py = pybind11;
+
+// Bind the time_step_2d function to Python
+PYBIND11_MODULE(weno5_advection, m) {
+    m.def("time_step_2d_return", &time_step_2d_return, "Time Stepping for 2D Advection",
+          py::arg("u"), py::arg("ax"), py::arg("ay"), py::arg("dt"), py::arg("dx"), py::arg("dy"), py::arg("bc"));
 }

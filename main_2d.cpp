@@ -39,7 +39,7 @@ int main() {
     int num_steps = 1000; // Adjust the number of steps to control the simulation time
 
     // Choose boundary condition
-    BoundaryCondition bc = DOUBLE_PERIODIC; // or ZERO_GRADIENT
+    int bc = 1; // or ZERO_GRADIENT
     
     // Time-stepping loop
     for (int i = 0; i < num_steps; ++i) {
