@@ -44,12 +44,12 @@ torch::Tensor apply_boundary_conditions(const torch::Tensor& u, int bc) {
         extended_u[-1] = u[2];
     } else if (bc == 2) {
         extended_u.slice(0, 3, -3) = u;
-        extended_u[0] = u[2];
-        extended_u[1] = u[1];
+        extended_u[0] = 2*u[0]-u[2];
+        extended_u[1] = 2*u[0]-u[1];
         extended_u[2] = u[0];
         extended_u[-3] = u[-1];
-        extended_u[-2] = u[-2];
-        extended_u[-1] = u[-3];
+        extended_u[-2] = 2*u[-1] - u[-2];
+        extended_u[-1] = 2*u[-1] - u[-3];
     }
 
     return extended_u;
