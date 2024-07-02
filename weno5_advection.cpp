@@ -42,6 +42,14 @@ torch::Tensor apply_boundary_conditions(const torch::Tensor& u, int bc) {
         extended_u[-3] = u[0];
         extended_u[-2] = u[1];
         extended_u[-1] = u[2];
+    } else if (bc == 2) {
+        extended_u.slice(0, 3, -3) = u;
+        extended_u[0] = u[2];
+        extended_u[1] = u[1];
+        extended_u[2] = u[0];
+        extended_u[-3] = u[-1];
+        extended_u[-2] = u[-2];
+        extended_u[-1] = u[-3];
     }
 
     return extended_u;
@@ -66,6 +74,14 @@ torch::Tensor apply_boundary_conditions_x(const torch::Tensor& u, int bc) {
         extended_u.index({torch::indexing::Slice(), -3}) = u.index({torch::indexing::Slice(), 0});
         extended_u.index({torch::indexing::Slice(), -2}) = u.index({torch::indexing::Slice(), 1});
         extended_u.index({torch::indexing::Slice(), -1}) = u.index({torch::indexing::Slice(), 2});
+    } else if (bc == 2) {
+        extended_u.slice(1, 3, -3) = u;
+        extended_u.index({torch::indexing::Slice(), 0}) = u.index({torch::indexing::Slice(), 2});
+        extended_u.index({torch::indexing::Slice(), 1}) = u.index({torch::indexing::Slice(), 1});
+        extended_u.index({torch::indexing::Slice(), 2}) = u.index({torch::indexing::Slice(), 0});
+        extended_u.index({torch::indexing::Slice(), -3}) = u.index({torch::indexing::Slice(), -1});
+        extended_u.index({torch::indexing::Slice(), -2}) = u.index({torch::indexing::Slice(), -2});
+        extended_u.index({torch::indexing::Slice(), -1}) = u.index({torch::indexing::Slice(), -3});
     }
 
     return extended_u;
@@ -90,6 +106,14 @@ torch::Tensor apply_boundary_conditions_y(const torch::Tensor& u, int bc) {
         extended_u.index({-3, torch::indexing::Slice()}) = u.index({0, torch::indexing::Slice()});
         extended_u.index({-2, torch::indexing::Slice()}) = u.index({1, torch::indexing::Slice()});
         extended_u.index({-1, torch::indexing::Slice()}) = u.index({2, torch::indexing::Slice()});
+    } else if (bc == 2) {
+        extended_u.slice(0, 3, -3) = u;
+        extended_u.index({0, torch::indexing::Slice()}) = u.index({2, torch::indexing::Slice()});
+        extended_u.index({1, torch::indexing::Slice()}) = u.index({1, torch::indexing::Slice()});
+        extended_u.index({2, torch::indexing::Slice()}) = u.index({0, torch::indexing::Slice()});
+        extended_u.index({-3, torch::indexing::Slice()}) = u.index({-1, torch::indexing::Slice()});
+        extended_u.index({-2, torch::indexing::Slice()}) = u.index({-2, torch::indexing::Slice()});
+        extended_u.index({-1, torch::indexing::Slice()}) = u.index({-3, torch::indexing::Slice()});
     }
 
     return extended_u;
@@ -201,6 +225,17 @@ torch::Tensor residual_2d(const torch::Tensor& u, const torch::Tensor& ax, const
     return res;
 }
 
+// 2D residual calculation function
+torch::Tensor residual_2d_general(const torch::Tensor& u, const torch::Tensor& ax, const torch::Tensor& ay, 
+        const torch::Tensor& dA_x, const torch::Tensor& dA_y, const torch::Tensor& dV, int bc) {
+    auto flux_x = weno5_reconstruction_x(u, ax, bc);
+    auto flux_y = weno5_reconstruction_y(u, ay, bc);
+    torch::Tensor res = torch::zeros_like(u, u.device());
+    res = (flux_x.slice(1, 1, -1) * dA_x.slice(1, 1, torch::nullopt) - flux_x.slice(1, 0, -2) * dA_x.slice(1, 0, -1)) / dV;
+    res += (flux_y.slice(0, 1, -1) * dA_y.slice(0, 1, torch::nullopt) - flux_y.slice(0, 0, -2) * dA_y.slice(0, 0, -1)) / dV;
+    return res;
+}
+
 // Time stepping function using RK3
 void time_step(torch::Tensor& u, const torch::Tensor& a, double dt, double dx, int bc) {
     auto k1 = residual(u, a, dx, bc);
@@ -234,10 +269,24 @@ torch::Tensor time_step_2d_return(const torch::Tensor& u, const torch::Tensor& a
     return new_u;
 }
 
+// 2D time stepping function using RK3, general grid specification with dA_x, dA_y and dV
+torch::Tensor time_step_2d_general(const torch::Tensor& u, const torch::Tensor& ax, const torch::Tensor& ay, 
+        double dt, const torch::Tensor& dA_x, const torch::Tensor& dA_y, const torch::Tensor& dV, int bc) {
+    auto k1 = residual_2d_general(u, ax, ay, dA_x, dA_y, dV, bc);
+    auto u1 = u - dt * k1;
+    // std::cout << u1.device() << std::endl;
+    auto k2 = residual_2d_general(u1, ax, ay, dA_x, dA_y, dV, bc);
+    auto u2 = 3.0/4.0 * u + 1.0/4.0 * (u1 - dt * k2);
+    auto k3 = residual_2d_general(u2, ax, ay, dA_x, dA_y, dV, bc);
+    auto new_u = 1.0/3.0 * u + 2.0/3.0 * (u2 - dt * k3);
+    return new_u;
+}
+
 namespace py = pybind11;
 
 // Bind the time_step_2d function to Python
 PYBIND11_MODULE(weno5_advection, m) {
-    m.def("time_step_2d_return", &time_step_2d_return, "Time Stepping for 2D Advection",
-          py::arg("u"), py::arg("ax"), py::arg("ay"), py::arg("dt"), py::arg("dx"), py::arg("dy"), py::arg("bc"));
+    m.def("time_step_2d_general", &time_step_2d_general, "Time Stepping for 2D Advection",
+          py::arg("u"), py::arg("ax"), py::arg("ay"), py::arg("dt"), 
+          py::arg("dA_x"), py::arg("dA_y"), py::arg("dV"), py::arg("bc"));
 }

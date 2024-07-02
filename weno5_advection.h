@@ -22,7 +22,13 @@ torch::Tensor weno5_reconstruction_y(const torch::Tensor& u, const torch::Tensor
 torch::Tensor residual_2d(const torch::Tensor& u, const torch::Tensor& ax, const torch::Tensor& ay, double dx, double dy, int bc);
 void time_step_2d(torch::Tensor& u, const torch::Tensor& ax, const torch::Tensor& ay, double dt, double dx, double dy, int bc);
 
+torch::Tensor residual_2d_general(const torch::Tensor& u, const torch::Tensor& ax, const torch::Tensor& ay, 
+        const torch::Tensor& dA_x, const torch::Tensor& dA_y, const torch::Tensor& dV, int bc);
+torch::Tensor time_step_2d_general(const torch::Tensor& u, const torch::Tensor& ax, const torch::Tensor& ay, 
+        double dt, const torch::Tensor& dA_x, const torch::Tensor& dA_y, const torch::Tensor& dV, int bc);
+
 // Python-related functions
 torch::Tensor time_step_2d_return(const torch::Tensor& u, const torch::Tensor& ax, const torch::Tensor& ay, double dt, double dx, double dy, int bc);
+
 
 #endif // WENO5_ADVECTION_H
